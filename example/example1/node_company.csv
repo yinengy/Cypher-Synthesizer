@@ -1,0 +1,8 @@
+node,Company
+id,company_name,location
+0,Google,UK
+1,Google,US
+2,Amazon,JP
+3,Amazon,CN
+4,Amazon,US
+5,UTAustin,US
