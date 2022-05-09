@@ -1,6 +1,6 @@
 output
-person_name,company_name,location
-Alice,UTAustin,US
-Mike,Amazon,US
-George,Google,US
-Jie,Amazon,US
+person_name,company_name
+Alice,UTAustin
+Mike,Amazon
+George,Google
+Jie,Amazon
