@@ -6,6 +6,7 @@ from record import Node, Relation, Output
 TYPE_OUTPUT = "output"
 TYPE_NODE = "node"
 TYPE_RELATION = "rel"
+TYPE_CONSTANT = "constant"
 
 class Example:
     """
@@ -16,6 +17,7 @@ class Example:
         self.nodes = {}
         self.relations = {}
         self.output = []
+        self.constants = []
 
         self._parse_example(example_dir_path)
 
@@ -45,6 +47,8 @@ class Example:
                 elif ex_type == TYPE_RELATION:
                     # relation should be parsed at the end since it need to find previous node objects
                     relation_files.append(f)
+                elif ex_type == TYPE_CONSTANT:
+                    self.constants.extend(lines[1:])
                 else:
                     raise RuntimeError(f"Illegall file: {f.absolute}")
 

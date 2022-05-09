@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase
+from example_parser import Example
 from record import Node, Relation
 
 class CypherDatabase:
@@ -65,3 +66,15 @@ class CypherDatabase:
         tx.run(f"MATCH {relation.src_node.str_with_variable('src')}"
                f"MATCH {relation.dst_node.str_with_variable('dst')}"
                f"CREATE (src){relation.short_repr()}(dst)")
+
+    def create_database_from_example(self, example: Example) -> None:
+        """
+        Use input example to create a database
+        """
+        for nodes in example.nodes.values():
+            for node in nodes:
+                self.create_node(node)
+        
+        for relations in example.relations.values():
+            for rel in relations:
+                self.create_relation(rel)
