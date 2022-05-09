@@ -9,11 +9,30 @@ class Node:
         self.properties = {}
 
     def short_repr(self) -> str:
+        """
+        (:label)
+        """
         return f"(:{self.label})"
 
-    def __repr__(self) -> str:
+    def str_with_variable(self, variable: str) -> str:
+        """
+        (variable:label {property: 'value'})
+        """
         properties_str_list = [k + ": " + '"' + v + '"' for k, v in self.properties.items()]
-        return f"<node {self.id} (:{self.label} {{{', '.join(properties_str_list)}}})>"
+        return f"({variable}:{self.label} {{{', '.join(properties_str_list)}}})"
+
+    def __str__(self) -> str:
+        """
+        (:label {property: 'value'})
+        """
+        return self.str_with_variable("")
+
+    def __repr__(self) -> str:
+        """
+        <node id (:label {property: 'value'})>
+        """
+        return f"<node {self.id} {self.__str__()}>"
+
 
 class Relation:
     """
@@ -26,13 +45,35 @@ class Relation:
         self.dst_node = dst_node
         self.properties = {}
 
-    def __repr__(self) -> str:
-        properties_str_list = [k + ": " + '"' + v + '"' for k, v in self.properties.items()]
+    def short_repr(self) -> str:
+        """
+        -[:label {property: 'value'}]->
+        """
+        return self.short_repr_with_variable("")
 
+    def short_repr_with_variable(self, variable: str) -> str:
+        """
+        -[variable:label {property: 'value'}]->
+        """
+        properties_str_list = [k + ": " + '"' + v + '"' for k, v in self.properties.items()]
+        rel_str = f"-[{variable}:{self.label} {{{', '.join(properties_str_list)}}}]->"  # the direction is fixed
+        return rel_str
+
+    def __str__(self) -> str:
+        """
+        (:node_label {property: 'value'})-[:label {property: 'value'}]->(:node_label2 {property: 'value'})
+        """
+        src_str = str(self.src_node)
+        dst_str = str(self.dst_node)
+        return src_str + self.short_repr() + dst_str
+
+    def __repr__(self) -> str:
+        """
+        <rel id (:node_label {property: 'value'})-[:label {property: 'value'}]->(:node_label2 {property: 'value'})>
+        """
         src_str = self.src_node.short_repr()
         dst_str = self.dst_node.short_repr()
-        rel_str = f"-[:{self.label} {{{', '.join(properties_str_list)}}}]->"  # the direction is fixed
-        return f"<rel {self.id} " + src_str + rel_str + dst_str + ">"
+        return f"<rel {self.id} " + src_str + self.short_repr() + dst_str + ">"
 
 class Output:
     """
