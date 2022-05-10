@@ -85,8 +85,8 @@ class CypherDatabase:
         Return None if query is invalid
         """
         with self.driver.session() as session:
-            print("\nQuery:")
-            print(query)
+            # print("\nQuery:")
+            # print(query)
             result = session.read_transaction(self._query, query)
 
             # for record in result:

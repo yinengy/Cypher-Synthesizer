@@ -1,6 +1,7 @@
-from typing import List
+from turtle import st
+from typing import List, Dict
 from queue import Queue
-from itertools import product
+from itertools import product, chain
 
 from example_parser import Example
 from database import CypherDatabase
@@ -14,12 +15,14 @@ class Synthesizer:
     example: Example
     database: CypherDatabase
     node_labels: List[str]
-    node_properties: List[str]
+    node_properties: Dict[str, List[str]]
     dsl_nodes: List[dsl.Node]
     relation_labels: List[str]
-    relation_properties: List[str]
+    relation_properties: Dict[str, List[str]]
     dsl_relations: List[dsl.Relation]
     fixed_Return_statement: dsl.Return
+    variable_to_label: Dict[str, str]
+    labels_to_properties: Dict[str, List[str]]
 
     def __init__(self, example: Example, database: CypherDatabase) -> None:
         self.example = example
@@ -31,31 +34,11 @@ class Synthesizer:
         self.relation_properties = {}
         self.dsl_relations = []
         self.fixed_Return_statement = None
+        self.variable_to_label = {}
+        self.labels_to_properties = {}
 
         self._collect_symbols()
         self._fix_Return_statement()
-
-    def _collect_symbols(self):
-        """
-        prepare node_labels, node_properties, relation_labels, relation_properties.
-        And create corresponding DSL object.
-        these will be used to complete sketch.
-        """
-        self.node_labels = list(self.example.nodes.keys())
-        for label in self.node_labels:
-            properties = self.example.nodes[label][0].properties.keys()
-            self.node_properties[label] = properties
-            
-            # create DSL Node object, and use <node{number}> as variable
-            self.dsl_nodes.append(dsl.Node(label, f"node{len(self.dsl_nodes)}"))
-        
-        self.relation_labels = list(self.example.relations.keys())
-        for label in self.relation_labels:
-            properties = self.example.relations[label][0].properties.keys()
-            self.relation_properties[label] = properties
-
-            # create DSL Relation object, and use <rel{number}> as variable
-            self.dsl_relations.append(dsl.Relation(label, f"rel{len(self.dsl_relations)}"))
 
     def synthesize(self) -> None:
         """
@@ -77,7 +60,7 @@ class Synthesizer:
         sorted_target_result = [tuple(record.values)  for record in self.example.output]
         sorted_target_result.sort()
 
-        for _ in range(1):  # let there be a limit on size of sketch
+        for _ in range(10):  # let there be a limit on size of sketch
             # get next sketch
             sketch_to_check = sketch.get()
             
@@ -86,7 +69,18 @@ class Synthesizer:
 
             # translate DSL to Cypher
             for dsl_program in search_space:
-                query = "\n".join([statement.to_Cypher() for statement in dsl_program])
+                cypher_statements = []
+                for i, statement in enumerate(dsl_program):
+                    if isinstance(statement, dsl.Require):
+                        # for multiple Require statements
+                        # combine them into one
+                        cypher_statements.append(statement.to_Cypher(dsl_program[i+1:-1]))
+                        cypher_statements.append(dsl_program[-1].to_Cypher())
+                        break
+                    else:
+                        cypher_statements.append(statement.to_Cypher())
+
+                query = "\n".join(cypher_statements)
                 result = self.database.query(query)
 
                 # check whether the result is valid
@@ -96,8 +90,14 @@ class Synthesizer:
 
                     # compare two sorted tuple
                     if sorted_result == sorted_target_result:
-                        return query
+                        return query  # found valid query
+            
+            # expand sketch space (program size increase by 1)
+            sketch.put(sketch_to_check[:-1] + [dsl.Require, dsl.Return])  # choice 1: add a new Require
+            sketch.put([dsl.Match] + sketch_to_check)  # choice 2: add a new Match
 
+        print("reach program size limit")
+        exit(1)
 
     def _complete_sketch(self, sketch: List[dsl.DSL.__subclasses__]) -> List[List[dsl.DSL]]:
         """
@@ -134,13 +134,13 @@ class Synthesizer:
                     if not last_level:
                         current_level.append([dsl.Match(node)])
                     else:  # add new statement to every previous statements
-                        current_level.append([x + [dsl.Match(node)] for x in last_level])
+                        current_level.extend([x + [dsl.Match(node)] for x in last_level])
 
                     # use set to avoid duplication
                     if not last_possible_variables:
-                        current_possible_variables.append(set([node.variable]))
+                        current_possible_variables.append({node.variable})
                     else:
-                        current_possible_variables.append(set([x.copy().add(node.variable) for x in last_possible_variables]))
+                        current_possible_variables.extend([x | {node.variable} for x in last_possible_variables])
 
                     # case 2: a relation with two nodes
                     for rel in self.dsl_relations:
@@ -148,12 +148,12 @@ class Synthesizer:
                             if not last_level:
                                 current_level.append([dsl.Match(node, rel, node2)])
                             else:  # add new statement to every previous statements
-                                current_level.append([x + [dsl.Match(node, rel, node2)] for x in last_level])
+                                current_level.extend([x + [dsl.Match(node, rel, node2)] for x in last_level])
                             
                             if not last_possible_variables:
-                                current_possible_variables.append(set([node.variable, rel.variable, node2.variable]))
+                                current_possible_variables.append({node.variable, rel.variable, node2.variable})
                             else:
-                                current_possible_variables.append(set([x.copy.update([node.variable, rel.variable, node2.variable]) for x in last_possible_variables]))
+                                current_possible_variables.extend([x | {node.variable, rel.variable, node2.variable} for x in last_possible_variables])
             elif dsl_class == dsl.Return:
                 # the Return statemen is pre-processed
                 # so only the variables fields are blank
@@ -171,10 +171,51 @@ class Synthesizer:
 
                 # Return statement should be the last statement
                 return current_level
+            elif dsl_class == dsl.Require:
+                # choice 1: EqualTo
+                for variable_set, previous_statements in zip(last_possible_variables, last_level):
+                    for variable in variable_set:
+                        label = self.variable_to_label[variable]
+                        for property in self.labels_to_properties[label]:
+                            for constant in self.example.constants:
+                                current_level.append(previous_statements + 
+                                    [dsl.Require(dsl.EqualTo(property, variable, constant))])
+                                current_possible_variables.append(variable_set.copy())  # variable unchanged
+            else:
+                raise RuntimeError(f"Illegall DSL: {dsl_class}")
 
             # save current level
             search_space_levels.append(current_level)
             possible_variables.append(current_possible_variables)
+
+    def _collect_symbols(self):
+        """
+        prepare node_labels, node_properties, relation_labels, relation_properties, variable_to_label
+        And create corresponding DSL object.
+        these will be used to complete sketch.
+        """
+        self.node_labels = list(self.example.nodes.keys())
+        for label in self.node_labels:
+            properties = self.example.nodes[label][0].properties.keys()
+            self.node_properties[label] = properties
+            
+            # create DSL Node object, and use <node{number}> as variable
+            variable = f"node{len(self.dsl_nodes)}"
+            self.variable_to_label[variable] = label
+            self.dsl_nodes.append(dsl.Node(label, variable))
+        
+        self.relation_labels = list(self.example.relations.keys())
+        for label in self.relation_labels:
+            properties = self.example.relations[label][0].properties.keys()
+            self.relation_properties[label] = properties
+
+            # create DSL Relation object, and use <rel{number}> as variable
+            variable = f"rel{len(self.dsl_relations)}"
+            self.variable_to_label[variable] = label
+            self.dsl_relations.append(dsl.Relation(label, variable))
+
+        self.labels_to_properties = self.node_properties.copy()
+        self.labels_to_properties.update(self.relation_properties)
 
     def _fix_Return_statement(self):
         """
@@ -192,12 +233,16 @@ if __name__=="__main__":
     database.clear_all()
 
     # parse example from files
-    example = Example("example/example1")
+    path = "example/example2"
+    example = Example(path)
     database.create_database_from_example(example)
+    print(f"Synthesize on {path}\n...")
 
     # launch synthesizer
     synthesizer = Synthesizer(example, database)
-    synthesizer.synthesize()
+    query = synthesizer.synthesize()
+    print("Found target query:")
+    print(query)
     # database.print_all()
     
     database.close()
