@@ -80,9 +80,10 @@ class Output:
     An output of a query (a single row)
     """
     def __init__(self) -> None:
-        self.properties = {}
+        self.keys = []
+        self.values = []
 
     def __repr__(self) -> str:
-        properties_str_list = [k + ": " + '"' + v + '"' for k, v in self.properties.items()]
+        key_value_list = [k + ": " + '"' + v + '"' for k, v in zip(self.keys, self.values)]
 
-        return f"Output {{{', '.join(properties_str_list)}}}"
+        return f"Output {{{', '.join(key_value_list)}}}"

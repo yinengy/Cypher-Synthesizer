@@ -1,4 +1,4 @@
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, Result
 from example_parser import Example
 from record import Node, Relation
 
@@ -78,3 +78,23 @@ class CypherDatabase:
         for relations in example.relations.values():
             for rel in relations:
                 self.create_relation(rel)
+
+    def query(self, query: str):
+        """
+        Execute a Cypher query, and return result
+        Return None if query is invalid
+        """
+        with self.driver.session() as session:
+            print("\nQuery:")
+            print(query)
+            result = session.read_transaction(self._query, query)
+
+            # for record in result:
+            #     print(record)
+            return result
+            
+            
+    @staticmethod
+    def _query(tx, query: str):
+        result = tx.run(query)
+        return [record for record in result]

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 
 from record import Node, Relation, Output
 
@@ -12,6 +12,10 @@ class Example:
     """
     A I/O example of a graph query
     """
+    nodes: Dict[str, List[Node]]
+    relations: Dict[str, List[Relation]]
+    output: List[Output]
+    constants: List[str]
 
     def __init__(self, example_dir_path: str) -> None:
         self.nodes = {}
@@ -123,13 +127,10 @@ class Example:
         <value 1>,<value 2>...
         ...
         """
-        property_name = lines[0].split(",")
-        property_num = len(property_name)
+        keys = lines[0].split(",")
 
         for l in lines[1:]:
-            values = l.split(",")
-            
             output = Output()
-            for i in range(property_num):  
-                output.properties[property_name[i]] = values[i]
+            output.keys = keys
+            output.values = l.split(",")
             self.output.append(output)

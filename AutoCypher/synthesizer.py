@@ -72,14 +72,32 @@ class Synthesizer:
         sketch = Queue()
         sketch.put([dsl.Match, dsl.Return])  # the simpliest sketch
 
+        # pre-process target result
+        # so could check if another query result match this easily
+        sorted_target_result = [tuple(record.values)  for record in self.example.output]
+        sorted_target_result.sort()
+
         for _ in range(1):  # let there be a limit on size of sketch
             # get next sketch
             sketch_to_check = sketch.get()
             
             # complete the sketch
-            sketch_search_space = self._complete_sketch(sketch_to_check)
+            search_space = self._complete_sketch(sketch_to_check)
 
-            print(sketch_search_space)
+            # translate DSL to Cypher
+            for dsl_program in search_space:
+                query = "\n".join([statement.to_Cypher() for statement in dsl_program])
+                result = self.database.query(query)
+
+                # check whether the result is valid
+                if len(result) == len(self.example.output):
+                    sorted_result = [tuple(record.values())  for record in result]
+                    sorted_result.sort()
+
+                    # compare two sorted tuple
+                    if sorted_result == sorted_target_result:
+                        return query
+
 
     def _complete_sketch(self, sketch: List[dsl.DSL.__subclasses__]) -> List[List[dsl.DSL]]:
         """
@@ -140,7 +158,7 @@ class Synthesizer:
                 # the Return statemen is pre-processed
                 # so only the variables fields are blank
                 # just pick them from last level's variables list
-                num_variables = len(self.fixed_Return_statement.values)
+                num_variables = len(self.fixed_Return_statement.properties)
 
                 # Return statement will not be the first statement in the query
                 # and since there exist at least a Match
@@ -149,7 +167,7 @@ class Synthesizer:
                     # permutation with replacement of all variables
                     for variables_choice in product(variable_set, repeat=num_variables):
                         current_level.append(previous_statements + 
-                            [dsl.Return(self.fixed_Return_statement.values, variables_choice)])
+                            [dsl.Return(self.fixed_Return_statement.properties, variables_choice)])
 
                 # Return statement should be the last statement
                 return current_level
@@ -164,8 +182,8 @@ class Synthesizer:
         This is because part of the Return statement always match the output table.
         So we could fix it in advance to reduce search space.
         """
-        values = self.example.output[0].properties.keys()
-        self.fixed_Return_statement = dsl.Return(values, None)  # variables is left blank, will be filled later
+        properties = self.example.output[0].keys
+        self.fixed_Return_statement = dsl.Return(properties, None)  # variables is left blank, will be filled later
 
 
 if __name__=="__main__":
