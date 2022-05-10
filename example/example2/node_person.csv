@@ -1,0 +1,10 @@
+node,Person
+id,person_name,age,country
+0,Bob,17,UK
+1,Alice,21,US
+2,Mike,40,US
+3,Jack,10,UK
+4,Misaki,28,JP
+5,George,67,US
+6,Jie,21,CN
+7,Ayaka,8,JP
